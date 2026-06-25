@@ -1,5 +1,7 @@
 # Grid Engineering 구현 계획
 
+[한국어](IMPLEMENTATION_PLAN.md) | [English](IMPLEMENTATION_PLAN_EN.md)
+
 ## 1. 기반 원칙
 
 - 대상은 Minecraft 1.21.1, NeoForge, Java 21이다.

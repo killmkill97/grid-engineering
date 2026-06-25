@@ -1,5 +1,7 @@
 # Grid Engineering
 
+[한국어](README.md) | [English](README_EN.md)
+
 Minecraft 1.21.1 NeoForge용 전력 전송 및 전력망 설계 모드입니다.
 
 현재 단계는 연결형 전선, FE 전송, 암페어 제한, 전선 화재와 전력 제어 장치를
