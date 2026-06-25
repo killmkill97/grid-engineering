@@ -1,0 +1,27 @@
+{
+    "variants": {
+        "facing=north": {
+            "model": "gridengineering:block/laser_receiver_mk4"
+        },
+        "facing=east": {
+            "model": "gridengineering:block/laser_receiver_mk4",
+            "y": 90
+        },
+        "facing=south": {
+            "model": "gridengineering:block/laser_receiver_mk4",
+            "y": 180
+        },
+        "facing=west": {
+            "model": "gridengineering:block/laser_receiver_mk4",
+            "y": 270
+        },
+        "facing=up": {
+            "model": "gridengineering:block/laser_receiver_mk4",
+            "x": 270
+        },
+        "facing=down": {
+            "model": "gridengineering:block/laser_receiver_mk4",
+            "x": 90
+        }
+    }
+}

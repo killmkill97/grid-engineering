@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "side": "gridengineering:block/test_battery_side",
+    "bottom": "gridengineering:block/test_battery",
+    "top": "gridengineering:block/test_battery"
+  }
+}

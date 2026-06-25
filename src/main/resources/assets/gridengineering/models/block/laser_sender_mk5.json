@@ -1,0 +1,8 @@
+{
+    "parent": "minecraft:block/orientable",
+    "textures": {
+        "top": "gridengineering:block/current_regulator_topbottom",
+        "front": "gridengineering:block/laser_sender_5",
+        "side": "gridengineering:block/laser_side"
+    }
+}

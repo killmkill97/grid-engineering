@@ -1,0 +1,27 @@
+{
+    "variants": {
+        "facing=north": {
+            "model": "gridengineering:block/laser_sender_mk2"
+        },
+        "facing=east": {
+            "model": "gridengineering:block/laser_sender_mk2",
+            "y": 90
+        },
+        "facing=south": {
+            "model": "gridengineering:block/laser_sender_mk2",
+            "y": 180
+        },
+        "facing=west": {
+            "model": "gridengineering:block/laser_sender_mk2",
+            "y": 270
+        },
+        "facing=up": {
+            "model": "gridengineering:block/laser_sender_mk2",
+            "x": 270
+        },
+        "facing=down": {
+            "model": "gridengineering:block/laser_sender_mk2",
+            "x": 90
+        }
+    }
+}

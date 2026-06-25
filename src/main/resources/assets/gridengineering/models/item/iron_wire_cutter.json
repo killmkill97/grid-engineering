@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "gridengineering:item/wire_cutter_iron"
+  }
+}

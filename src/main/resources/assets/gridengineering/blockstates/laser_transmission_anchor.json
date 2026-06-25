@@ -1,0 +1,56 @@
+{
+  "variants": {
+    "active=false,facing=down": {
+      "model": "gridengineering:block/laser_transmission_anchor"
+    },
+    "active=true,facing=down": {
+      "model": "gridengineering:block/laser_transmission_anchor"
+    },
+    "active=false,facing=up": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 180
+    },
+    "active=true,facing=up": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 180
+    },
+    "active=false,facing=north": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270
+    },
+    "active=true,facing=north": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270
+    },
+    "active=false,facing=east": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 90
+    },
+    "active=true,facing=east": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 90
+    },
+    "active=false,facing=south": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 180
+    },
+    "active=true,facing=south": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 180
+    },
+    "active=false,facing=west": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 270
+    },
+    "active=true,facing=west": {
+      "model": "gridengineering:block/laser_transmission_anchor",
+      "x": 270,
+      "y": 270
+    }
+  }
+}
