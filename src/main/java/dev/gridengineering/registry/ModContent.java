@@ -4,6 +4,7 @@ import dev.gridengineering.GridEngineering;
 import dev.gridengineering.block.CurrentRegulatorBlock;
 import dev.gridengineering.block.LaserTransformerBlock;
 import dev.gridengineering.block.LaserTransmissionAnchorBlock;
+import dev.gridengineering.block.GridControllerBlock;
 import dev.gridengineering.block.TestBatteryBlock;
 import dev.gridengineering.block.WireBlock;
 import dev.gridengineering.block.WireCoating;
@@ -11,6 +12,7 @@ import dev.gridengineering.block.WireGauge;
 import dev.gridengineering.block.WireMaterial;
 import dev.gridengineering.block.entity.CurrentRegulatorBlockEntity;
 import dev.gridengineering.block.entity.LaserTransformerBlockEntity;
+import dev.gridengineering.block.entity.GridControllerBlockEntity;
 import dev.gridengineering.block.entity.TestBatteryBlockEntity;
 import dev.gridengineering.block.entity.WireBlockEntity;
 import dev.gridengineering.item.NetworkMonitorItem;
@@ -19,6 +21,7 @@ import dev.gridengineering.item.WireCutterItem;
 import dev.gridengineering.laser.LaserRole;
 import dev.gridengineering.laser.LaserTier;
 import dev.gridengineering.menu.PowerControlMenu;
+import dev.gridengineering.gridcontroller.GridControllerTier;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -57,6 +60,10 @@ public final class ModContent {
     private static final Map<String, DeferredBlock<LaserTransformerBlock>> LASER_BLOCKS =
             new LinkedHashMap<>();
     private static final Map<String, DeferredItem<BlockItem>> LASER_ITEMS = new LinkedHashMap<>();
+    private static final Map<String, DeferredBlock<GridControllerBlock>> GRID_CONTROLLER_BLOCKS =
+            new LinkedHashMap<>();
+    private static final Map<String, DeferredItem<BlockItem>> GRID_CONTROLLER_ITEMS =
+            new LinkedHashMap<>();
 
     public static final DeferredBlock<WireBlock> COPPER_WIRE;
     public static final DeferredItem<WireBlockItem> COPPER_WIRE_ITEM;
@@ -74,6 +81,9 @@ public final class ModContent {
         for (LaserTier tier : LaserTier.values()) {
             registerLaserTransformer(tier, LaserRole.SENDER);
             registerLaserTransformer(tier, LaserRole.RECEIVER);
+        }
+        for (GridControllerTier tier : GridControllerTier.values()) {
+            registerGridController(tier);
         }
 
         COPPER_WIRE = WIRE_BLOCKS.get(wireId(WireMaterial.COPPER, WireGauge.MM_1));
@@ -202,6 +212,17 @@ public final class ModContent {
                     ).build(null)
             );
 
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<GridControllerBlockEntity>>
+            GRID_CONTROLLER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register(
+                    "grid_controller",
+                    () -> BlockEntityType.Builder.of(
+                            GridControllerBlockEntity::new,
+                            GRID_CONTROLLER_BLOCKS.values().stream()
+                                    .map(DeferredBlock::get)
+                                    .toArray(Block[]::new)
+                    ).build(null)
+            );
+
     public static final DeferredHolder<MenuType<?>, MenuType<PowerControlMenu>> POWER_CONTROL_MENU =
             MENU_TYPES.register(
                     "power_control",
@@ -227,6 +248,7 @@ public final class ModContent {
                                 output.accept(TEST_BATTERY_ITEM.get());
                                 output.accept(CURRENT_REGULATOR_ITEM.get());
                                 output.accept(LASER_TRANSMISSION_ANCHOR_ITEM.get());
+                                gridControllerItems().forEach(output::accept);
                                 laserItems().forEach(output::accept);
                                 wireItems().forEach(output::accept);
                             })
@@ -250,6 +272,14 @@ public final class ModContent {
 
     public static Collection<DeferredItem<BlockItem>> laserItems() {
         return LASER_ITEMS.values();
+    }
+
+    public static Collection<DeferredBlock<GridControllerBlock>> gridControllerBlocks() {
+        return GRID_CONTROLLER_BLOCKS.values();
+    }
+
+    public static Collection<DeferredItem<BlockItem>> gridControllerItems() {
+        return GRID_CONTROLLER_ITEMS.values();
     }
 
     public static String wireId(WireMaterial material, WireGauge gauge) {
@@ -302,6 +332,25 @@ public final class ModContent {
         DeferredItem<BlockItem> item = ITEMS.registerSimpleBlockItem(id, block);
         LASER_BLOCKS.put(id, block);
         LASER_ITEMS.put(id, item);
+    }
+
+    public static String gridControllerId(GridControllerTier tier) {
+        return "grid_controller_" + tier.id();
+    }
+
+    private static void registerGridController(GridControllerTier tier) {
+        String id = gridControllerId(tier);
+        DeferredBlock<GridControllerBlock> block = BLOCKS.registerBlock(
+                id,
+                properties -> new GridControllerBlock(properties, tier),
+                BlockBehaviour.Properties.of()
+                        .mapColor(MapColor.METAL)
+                        .strength(4.0F, 8.0F)
+                        .sound(SoundType.METAL)
+        );
+        DeferredItem<BlockItem> item = ITEMS.registerSimpleBlockItem(id, block);
+        GRID_CONTROLLER_BLOCKS.put(id, block);
+        GRID_CONTROLLER_ITEMS.put(id, item);
     }
 
     public static void register(IEventBus modEventBus) {

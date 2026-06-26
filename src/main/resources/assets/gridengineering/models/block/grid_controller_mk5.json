@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "gridengineering:block/grid_controller_5",
+    "front": "gridengineering:block/grid_controller_front_5",
+    "side": "gridengineering:block/grid_controller_5"
+  }
+}

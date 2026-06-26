@@ -4,6 +4,7 @@ import dev.gridengineering.GridEngineering;
 import dev.gridengineering.block.LaserTransmissionAnchorBlock;
 import dev.gridengineering.block.entity.CurrentRegulatorBlockEntity;
 import dev.gridengineering.block.entity.LaserTransformerBlockEntity;
+import dev.gridengineering.block.entity.GridControllerBlockEntity;
 import dev.gridengineering.block.entity.TestBatteryBlockEntity;
 import dev.gridengineering.energy.VoltageTiers;
 import java.util.Locale;
@@ -69,6 +70,13 @@ public final class LongPowerComponentProvider
             );
             data.putLong(INPUT_TAG, regulator.getInputPowerForDisplay());
             data.putLong(OUTPUT_TAG, regulator.getOutputPowerForDisplay());
+        } else if (accessor.getBlockEntity() instanceof GridControllerBlockEntity controller) {
+            data.putString(TYPE_TAG, "controller");
+            data.putLong(VOLTAGE_TAG, controller.getMaxVoltage());
+            data.putInt(AMPS_TAG, (int)Math.min(controller.getMaxAmps(), Integer.MAX_VALUE));
+            data.putLong(MAX_OUTPUT_TAG, controller.tier().maxPower());
+            data.putLong(INPUT_TAG, controller.getInputPowerForDisplay());
+            data.putLong(OUTPUT_TAG, controller.getOutputPowerForDisplay());
         } else if (accessor.getBlockEntity() instanceof LaserTransformerBlockEntity laser) {
             data.putString(TYPE_TAG, "laser");
             data.putBoolean(CONNECTED_TAG, laser.linkedPos() != null);
@@ -161,7 +169,8 @@ public final class LongPowerComponentProvider
                 format(data.getLong(MAX_OUTPUT_TAG))
         ));
 
-        if ("regulator".equals(data.getString(TYPE_TAG))) {
+        if ("regulator".equals(data.getString(TYPE_TAG))
+                || "controller".equals(data.getString(TYPE_TAG))) {
             tooltip.add(Component.translatable(
                     "jade.gridengineering.input",
                     format(data.getLong(INPUT_TAG))

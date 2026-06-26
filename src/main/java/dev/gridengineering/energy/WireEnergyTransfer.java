@@ -2,6 +2,7 @@ package dev.gridengineering.energy;
 
 import dev.gridengineering.block.WireBlock;
 import dev.gridengineering.block.WirePortMode;
+import dev.gridengineering.block.entity.GridControllerBlockEntity;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.math.BigInteger;
@@ -45,7 +46,11 @@ public final class WireEnergyTransfer {
 
             Direction sourceSide = direction.getOpposite();
             PowerEndpoint source = PowerEndpointAccess.find(level, endpointPos, sourceSide);
-            if (source == null || !source.canExtract() || alreadyTransferredThisTick(level, endpointPos)) {
+            BlockEntity sourceBlockEntity = level.getBlockEntity(endpointPos);
+            boolean canTransferFromMultipleFaces = sourceBlockEntity instanceof GridControllerBlockEntity;
+            if (source == null
+                    || !source.canExtract()
+                    || (!canTransferFromMultipleFaces && alreadyTransferredThisTick(level, endpointPos))) {
                 continue;
             }
 
@@ -60,6 +65,7 @@ public final class WireEnergyTransfer {
         NetworkScan network = scanNetwork(level, wirePos, null, false);
         NetworkTickState tickState = runtime(level).networkStates.get(network.networkId());
         long gameTime = level.getGameTime();
+        long inspectedWireMaxAmps = inspectedWireMaxAmps(level, wirePos);
 
         if (tickState == null || tickState.tick < gameTime - 1L || tickState.tick > gameTime) {
             return new NetworkSnapshot(
@@ -70,6 +76,9 @@ public final class WireEnergyTransfer {
                     network.maxVoltage(),
                     0L,
                     network.maxAmps(),
+                    0L,
+                    inspectedWireMaxAmps,
+                    List.copyOf(network.gridControllers()),
                     0L,
                     0L,
                     0L,
@@ -85,11 +94,20 @@ public final class WireEnergyTransfer {
                 network.maxVoltage(),
                 tickState.usedMicroAmps,
                 network.maxAmps(),
+                tickState.wireLoad(wirePos),
+                inspectedWireMaxAmps,
+                List.copyOf(network.gridControllers()),
                 tickState.inputPower,
                 tickState.outputPower,
                 tickState.lossPower,
                 List.copyOf(tickState.transfers)
         );
+    }
+
+    private static long inspectedWireMaxAmps(ServerLevel level, BlockPos wirePos) {
+        return level.getBlockState(wirePos).getBlock() instanceof WireBlock wireBlock
+                ? wireBlock.maxAmps()
+                : 0L;
     }
 
     public static boolean isPowerFlowing(ServerLevel level, BlockPos wirePos) {
@@ -127,17 +145,6 @@ public final class WireEnergyTransfer {
         }
 
         NetworkTickState tickState = networkTickState(level, network.networkId());
-        if (profile.voltage() > network.maxVoltage()) {
-            igniteOverloadedWire(level, network, tickState);
-            return;
-        }
-
-        long potentialMicroAmps = toMicroAmps(potentialTransfer, profile.voltage());
-        long maxMicroAmps = Math.multiplyExact(network.maxAmps(), MICRO_AMPS_PER_AMP);
-        if (wouldExceed(tickState.usedMicroAmps, potentialMicroAmps, maxMicroAmps)) {
-            igniteOverloadedWire(level, network, tickState);
-            return;
-        }
 
         long remaining = profile.availablePower();
         long[] capacities = new long[network.sinks().size()];
@@ -153,6 +160,33 @@ public final class WireEnergyTransfer {
                 existingLoads,
                 level.random
         );
+
+        Long2LongOpenHashMap plannedWireLoads = new Long2LongOpenHashMap();
+        plannedWireLoads.defaultReturnValue(0L);
+        for (int index = 0; index < allocations.length; index++) {
+            EnergyEndpoint sink = network.sinks().get(index);
+            long planned = Math.min(remaining, allocations[index]);
+            if (planned <= 0L) {
+                continue;
+            }
+
+            long plannedMicroAmps = toMicroAmps(planned, profile.voltage());
+            BlockPos overloadedWire = firstOverloadedWire(
+                    network,
+                    tickState,
+                    plannedWireLoads,
+                    sink,
+                    profile.voltage(),
+                    plannedMicroAmps
+            );
+            if (overloadedWire != null) {
+                igniteWire(level, overloadedWire, tickState);
+                return;
+            }
+            for (BlockPos routeWire : sink.routeWires()) {
+                plannedWireLoads.addTo(routeWire.asLong(), plannedMicroAmps);
+            }
+        }
 
         for (int index = 0; index < allocations.length && remaining > 0L; index++) {
             EnergyEndpoint sink = network.sinks().get(index);
@@ -194,7 +228,8 @@ public final class WireEnergyTransfer {
                     inserted,
                     actualLoss,
                     usedMicroAmps,
-                    sink.wireDistance()
+                    sink.wireDistance(),
+                    sink.routeWires()
             );
             remaining -= extracted;
         }
@@ -229,9 +264,19 @@ public final class WireEnergyTransfer {
         if (tickState.burned || network.wires().isEmpty()) {
             return;
         }
-        tickState.burned = true;
-
         BlockPos burnedWire = network.wires().get(level.random.nextInt(network.wires().size()));
+        igniteWire(level, burnedWire, tickState);
+    }
+
+    private static void igniteWire(
+            ServerLevel level,
+            BlockPos burnedWire,
+            NetworkTickState tickState
+    ) {
+        if (tickState.burned) {
+            return;
+        }
+        tickState.burned = true;
         level.setBlockAndUpdate(burnedWire, BaseFireBlock.getState(level, burnedWire));
         level.playSound(
                 null,
@@ -241,6 +286,32 @@ public final class WireEnergyTransfer {
                 1.0F,
                 0.7F + level.random.nextFloat() * 0.25F
         );
+    }
+
+    @Nullable
+    private static BlockPos firstOverloadedWire(
+            NetworkScan network,
+            NetworkTickState tickState,
+            Long2LongOpenHashMap plannedWireLoads,
+            EnergyEndpoint sink,
+            long voltage,
+            long microAmps
+    ) {
+        for (BlockPos routeWire : sink.routeWires()) {
+            long wireKey = routeWire.asLong();
+            if (voltage > network.wireMaxVoltages().get(wireKey)) {
+                return routeWire;
+            }
+
+            long existingLoad = tickState.wireLoad(routeWire);
+            long plannedLoad = plannedWireLoads.get(wireKey);
+            long currentLoad = saturatedAdd(existingLoad, plannedLoad);
+            long maximumLoad = network.wireMaxMicroAmps().get(wireKey);
+            if (wouldExceed(currentLoad, microAmps, maximumLoad)) {
+                return routeWire;
+            }
+        }
+        return null;
     }
 
     private static SourceProfile sourceProfile(
@@ -276,10 +347,17 @@ public final class WireEnergyTransfer {
                         .thenComparingLong(visit -> visit.pos().asLong())
         );
         Map<Long, PathCost> bestPaths = new HashMap<>();
+        Map<Long, Long> previousWires = new HashMap<>();
         LongOpenHashSet visitedWires = new LongOpenHashSet();
         LongOpenHashSet visitedEndpoints = new LongOpenHashSet();
+        LongOpenHashSet visitedGridControllers = new LongOpenHashSet();
         List<BlockPos> wires = new ArrayList<>();
         List<EnergyEndpoint> sinks = new ArrayList<>();
+        List<BlockPos> gridControllers = new ArrayList<>();
+        Long2LongOpenHashMap wireMaxMicroAmps = new Long2LongOpenHashMap();
+        Long2LongOpenHashMap wireMaxVoltages = new Long2LongOpenHashMap();
+        wireMaxMicroAmps.defaultReturnValue(0L);
+        wireMaxVoltages.defaultReturnValue(0L);
         long networkId = startWirePos.asLong();
         long maxVoltage = Long.MAX_VALUE;
         long maxAmps = Long.MAX_VALUE;
@@ -291,6 +369,9 @@ public final class WireEnergyTransfer {
                     networkId,
                     wires,
                     sinks,
+                    gridControllers,
+                    wireMaxMicroAmps,
+                    wireMaxVoltages,
                     "LV",
                     DEFAULT_FE_VOLTAGE,
                     1L
@@ -329,6 +410,8 @@ public final class WireEnergyTransfer {
                 voltageTierName = wireBlock.voltageTierName();
             }
             maxAmps = Math.min(maxAmps, wireBlock.maxAmps());
+            wireMaxMicroAmps.put(wireKey, maxMicroAmps(wireBlock.maxAmps()));
+            wireMaxVoltages.put(wireKey, wireBlock.ratedVoltage());
 
             for (Direction direction : Direction.values()) {
                 if (!WireBlock.isConnected(wireState, direction)) {
@@ -351,6 +434,7 @@ public final class WireEnergyTransfer {
                         PathCost previous = bestPaths.get(neighborKey);
                         if (previous == null || candidate.isBetterThan(previous)) {
                             bestPaths.put(neighborKey, candidate);
+                            previousWires.put(neighborKey, wireKey);
                             queue.add(
                                     new WireVisit(
                                             neighborPos.immutable(),
@@ -363,11 +447,16 @@ public final class WireEnergyTransfer {
                     continue;
                 }
 
+                long endpointKey = neighborPos.asLong();
+                if (level.getBlockEntity(neighborPos) instanceof GridControllerBlockEntity
+                        && visitedGridControllers.add(endpointKey)) {
+                    gridControllers.add(neighborPos.immutable());
+                }
+
                 if (!collectSinks) {
                     continue;
                 }
 
-                long endpointKey = neighborPos.asLong();
                 if (neighborPos.equals(sourcePos)
                         || WireBlock.getPortMode(level, wirePos, direction) == WirePortMode.OUTPUT
                         || !visitedEndpoints.add(endpointKey)) {
@@ -385,7 +474,8 @@ public final class WireEnergyTransfer {
                                     neighborPos.immutable(),
                                     sink,
                                     visit.pathLossPerAmpPpm(),
-                                    visit.wireDistance()
+                                    visit.wireDistance(),
+                                    routeTo(previousWires, visit.pos())
                             )
                     );
                 }
@@ -404,13 +494,31 @@ public final class WireEnergyTransfer {
                 networkId,
                 wires,
                 sinks,
+                gridControllers,
+                wireMaxMicroAmps,
+                wireMaxVoltages,
                 voltageTierName,
                 maxVoltage,
                 maxAmps
         );
     }
 
-    private static long toMicroAmps(long power, long voltage) {
+    private static List<BlockPos> routeTo(Map<Long, Long> previousWires, BlockPos endWirePos) {
+        List<BlockPos> route = new ArrayList<>();
+        long wireKey = endWirePos.asLong();
+        int guard = 0;
+        while (guard++ < MAX_NETWORK_WIRES) {
+            route.add(BlockPos.of(wireKey));
+            Long previous = previousWires.get(wireKey);
+            if (previous == null) {
+                break;
+            }
+            wireKey = previous;
+        }
+        return route;
+    }
+
+    public static long toMicroAmps(long power, long voltage) {
         if (power <= 0L || voltage <= 0L) {
             return 0L;
         }
@@ -428,6 +536,15 @@ public final class WireEnergyTransfer {
 
     private static boolean wouldExceed(long current, long addition, long maximum) {
         return addition > maximum || current > maximum - addition;
+    }
+
+    private static long maxMicroAmps(long amps) {
+        if (amps <= 0L) {
+            return 0L;
+        }
+        return amps > Long.MAX_VALUE / MICRO_AMPS_PER_AMP
+                ? Long.MAX_VALUE
+                : amps * MICRO_AMPS_PER_AMP;
     }
 
     private static long saturatedAdd(long first, long second) {
@@ -471,6 +588,9 @@ public final class WireEnergyTransfer {
             long maxVoltage,
             long currentMicroAmps,
             long maxAmps,
+            long inspectedWireMicroAmps,
+            long inspectedWireMaxAmps,
+            List<BlockPos> gridControllers,
             long inputPower,
             long outputPower,
             long lossPower,
@@ -496,6 +616,9 @@ public final class WireEnergyTransfer {
             long networkId,
             List<BlockPos> wires,
             List<EnergyEndpoint> sinks,
+            List<BlockPos> gridControllers,
+            Long2LongOpenHashMap wireMaxMicroAmps,
+            Long2LongOpenHashMap wireMaxVoltages,
             String voltageTierName,
             long maxVoltage,
             long maxAmps
@@ -509,7 +632,8 @@ public final class WireEnergyTransfer {
             BlockPos pos,
             PowerEndpoint storage,
             long routeLossPerAmpPpm,
-            int wireDistance
+            int wireDistance,
+            List<BlockPos> routeWires
     ) {
     }
 
@@ -542,10 +666,12 @@ public final class WireEnergyTransfer {
         private long lossPower;
         private boolean burned;
         private final Long2LongOpenHashMap destinationLoads = new Long2LongOpenHashMap();
+        private final Long2LongOpenHashMap wireLoads = new Long2LongOpenHashMap();
         private final List<TransferRecord> transfers = new ArrayList<>();
 
         private NetworkTickState() {
             this.destinationLoads.defaultReturnValue(0L);
+            this.wireLoads.defaultReturnValue(0L);
         }
 
         private void reset(long gameTime) {
@@ -557,11 +683,16 @@ public final class WireEnergyTransfer {
             this.lossPower = 0L;
             this.burned = false;
             this.destinationLoads.clear();
+            this.wireLoads.clear();
             this.transfers.clear();
         }
 
         private long destinationLoad(BlockPos destination) {
             return this.destinationLoads.get(destination.asLong());
+        }
+
+        private long wireLoad(BlockPos wirePos) {
+            return this.wireLoads.get(wirePos.asLong());
         }
 
         private void recordTransfer(
@@ -572,7 +703,8 @@ public final class WireEnergyTransfer {
                 long outputAmount,
                 long lostAmount,
                 long microAmps,
-                int wireDistance
+                int wireDistance,
+                List<BlockPos> routeWires
         ) {
             this.activeVoltage = Math.max(this.activeVoltage, voltage);
             this.usedMicroAmps = saturatedAdd(this.usedMicroAmps, microAmps);
@@ -580,6 +712,9 @@ public final class WireEnergyTransfer {
             this.outputPower = saturatedAdd(this.outputPower, outputAmount);
             this.lossPower = saturatedAdd(this.lossPower, lostAmount);
             this.destinationLoads.addTo(destination.asLong(), outputAmount);
+            for (BlockPos routeWire : routeWires) {
+                this.wireLoads.addTo(routeWire.asLong(), microAmps);
+            }
 
             for (int index = 0; index < this.transfers.size(); index++) {
                 TransferRecord transfer = this.transfers.get(index);

@@ -77,10 +77,34 @@ public final class NetworkMonitorItem extends Item {
         player.sendSystemMessage(
                 Component.translatable(
                         "message.gridengineering.network_monitor.amperage",
-                        formatMicroAmperage(snapshot.currentMicroAmps()),
-                        formatNumber(snapshot.maxAmps())
+                        formatMicroAmperage(snapshot.inspectedWireMicroAmps()),
+                        formatNumber(snapshot.inspectedWireMaxAmps())
                 ).withStyle(ChatFormatting.AQUA)
         );
+        player.sendSystemMessage(
+                Component.translatable(
+                        "message.gridengineering.network_monitor.wire_load",
+                        formatMicroAmperage(snapshot.inspectedWireMicroAmps())
+                ).withStyle(ChatFormatting.BLUE)
+        );
+        player.sendSystemMessage(
+                Component.translatable(
+                        "message.gridengineering.network_monitor.grid_controller",
+                        Component.translatable(snapshot.gridControllers().isEmpty()
+                                ? "message.gridengineering.network_monitor.grid_controller.disconnected"
+                                : "message.gridengineering.network_monitor.grid_controller.connected")
+                ).withStyle(snapshot.gridControllers().isEmpty()
+                        ? ChatFormatting.DARK_GRAY
+                        : ChatFormatting.LIGHT_PURPLE)
+        );
+        for (BlockPos controllerPos : snapshot.gridControllers()) {
+            player.sendSystemMessage(
+                    Component.translatable(
+                            "message.gridengineering.network_monitor.grid_controller_position",
+                            formatPosition(controllerPos)
+                    ).withStyle(ChatFormatting.LIGHT_PURPLE)
+            );
+        }
         player.sendSystemMessage(
                 Component.translatable(
                         "message.gridengineering.network_monitor.input",
