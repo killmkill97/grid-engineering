@@ -161,30 +161,54 @@ public final class WireEnergyTransfer {
                 level.random
         );
 
-        Long2LongOpenHashMap plannedWireLoads = new Long2LongOpenHashMap();
-        plannedWireLoads.defaultReturnValue(0L);
-        for (int index = 0; index < allocations.length; index++) {
-            EnergyEndpoint sink = network.sinks().get(index);
-            long planned = Math.min(remaining, allocations[index]);
-            if (planned <= 0L) {
-                continue;
-            }
+        boolean routeBasedLoads = network.hasGridController();
+        if (routeBasedLoads) {
+            Long2LongOpenHashMap plannedWireLoads = new Long2LongOpenHashMap();
+            plannedWireLoads.defaultReturnValue(0L);
+            for (int index = 0; index < allocations.length; index++) {
+                EnergyEndpoint sink = network.sinks().get(index);
+                long planned = Math.min(remaining, allocations[index]);
+                if (planned <= 0L) {
+                    continue;
+                }
 
-            long plannedMicroAmps = toMicroAmps(planned, profile.voltage());
-            BlockPos overloadedWire = firstOverloadedWire(
-                    network,
-                    tickState,
-                    plannedWireLoads,
-                    sink,
-                    profile.voltage(),
-                    plannedMicroAmps
-            );
-            if (overloadedWire != null) {
-                igniteWire(level, overloadedWire, tickState);
+                long plannedMicroAmps = toMicroAmps(planned, profile.voltage());
+                BlockPos overloadedWire = firstOverloadedWire(
+                        network,
+                        tickState,
+                        plannedWireLoads,
+                        sink,
+                        profile.voltage(),
+                        plannedMicroAmps
+                );
+                if (overloadedWire != null) {
+                    igniteWire(level, overloadedWire, tickState);
+                    return;
+                }
+                for (BlockPos routeWire : sink.routeWires()) {
+                    plannedWireLoads.addTo(routeWire.asLong(), plannedMicroAmps);
+                }
+            }
+        } else {
+            if (profile.voltage() > network.maxVoltage()) {
+                igniteOverloadedWire(level, network, tickState);
                 return;
             }
-            for (BlockPos routeWire : sink.routeWires()) {
-                plannedWireLoads.addTo(routeWire.asLong(), plannedMicroAmps);
+
+            long plannedMicroAmps = 0L;
+            long networkMaxMicroAmps = maxMicroAmps(network.maxAmps());
+            for (long allocation : allocations) {
+                long planned = Math.min(remaining, allocation);
+                if (planned <= 0L) {
+                    continue;
+                }
+
+                long addition = toMicroAmps(planned, profile.voltage());
+                if (wouldExceed(tickState.usedMicroAmps, saturatedAdd(plannedMicroAmps, addition), networkMaxMicroAmps)) {
+                    igniteOverloadedWire(level, network, tickState);
+                    return;
+                }
+                plannedMicroAmps = saturatedAdd(plannedMicroAmps, addition);
             }
         }
 
@@ -229,7 +253,7 @@ public final class WireEnergyTransfer {
                     actualLoss,
                     usedMicroAmps,
                     sink.wireDistance(),
-                    sink.routeWires()
+                    routeBasedLoads ? sink.routeWires() : network.wires()
             );
             remaining -= extracted;
         }
@@ -625,6 +649,10 @@ public final class WireEnergyTransfer {
     ) {
         private int wireCount() {
             return this.wires.size();
+        }
+
+        private boolean hasGridController() {
+            return !this.gridControllers.isEmpty();
         }
     }
 

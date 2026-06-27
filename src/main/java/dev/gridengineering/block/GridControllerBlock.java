@@ -4,10 +4,17 @@ import com.mojang.serialization.MapCodec;
 import dev.gridengineering.block.entity.GridControllerBlockEntity;
 import dev.gridengineering.gridcontroller.GridControllerTier;
 import dev.gridengineering.registry.ModContent;
+import java.text.NumberFormat;
+import java.util.List;
+import java.util.Locale;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -48,6 +55,23 @@ public final class GridControllerBlock extends BaseEntityBlock {
 
     public GridControllerTier tier() {
         return this.tier;
+    }
+
+    @Override
+    public void appendHoverText(
+            ItemStack stack,
+            Item.TooltipContext context,
+            List<Component> tooltipComponents,
+            TooltipFlag tooltipFlag
+    ) {
+        tooltipComponents.add(
+                Component.translatable(
+                                "tooltip.gridengineering.grid_controller.max_voltage",
+                                this.tier.voltageTierName(),
+                                NumberFormat.getIntegerInstance(Locale.ROOT).format(this.tier.maxVoltage())
+                        )
+                        .withStyle(ChatFormatting.GRAY)
+        );
     }
 
     @Override

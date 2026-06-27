@@ -6,9 +6,17 @@ import dev.gridengineering.laser.LaserLinkManager;
 import dev.gridengineering.laser.LaserRole;
 import dev.gridengineering.laser.LaserTier;
 import dev.gridengineering.registry.ModContent;
+import java.text.NumberFormat;
+import java.util.List;
+import java.util.Locale;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
@@ -52,6 +60,30 @@ public final class LaserTransformerBlock extends BaseEntityBlock {
 
     public LaserRole role() {
         return this.role;
+    }
+
+    @Override
+    public void appendHoverText(
+            ItemStack stack,
+            Item.TooltipContext context,
+            List<Component> tooltipComponents,
+            TooltipFlag tooltipFlag
+    ) {
+        tooltipComponents.add(
+                Component.translatable(
+                                "tooltip.gridengineering.laser.max_voltage",
+                                formatVoltage(this.tier.maxVoltage())
+                        )
+                        .withStyle(ChatFormatting.GRAY)
+        );
+        tooltipComponents.add(
+                Component.translatable(
+                                "tooltip.gridengineering.laser.max_distance",
+                                NumberFormat.getIntegerInstance(Locale.ROOT)
+                                        .format(this.tier.maxDistance())
+                        )
+                        .withStyle(ChatFormatting.GRAY)
+        );
     }
 
     @Override
@@ -124,5 +156,12 @@ public final class LaserTransformerBlock extends BaseEntityBlock {
             LaserLinkManager.unregister(serverLevel, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    private static Component formatVoltage(long voltage) {
+        if (voltage == Long.MAX_VALUE) {
+            return Component.translatable("tooltip.gridengineering.unlimited");
+        }
+        return Component.literal(NumberFormat.getIntegerInstance(Locale.ROOT).format(voltage) + " V");
     }
 }

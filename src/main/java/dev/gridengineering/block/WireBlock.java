@@ -40,8 +40,6 @@ public class WireBlock extends PipeBlock implements EntityBlock {
     private final WireMaterial material;
     private final WireGauge gauge;
     private final WireCoating coating;
-    private final String voltageTierName;
-    private final long ratedVoltage;
     private final long maxAmps;
     private final long lossPerMeterPerAmpPpm;
 
@@ -59,8 +57,6 @@ public class WireBlock extends PipeBlock implements EntityBlock {
         this.material = material;
         this.gauge = gauge;
         this.coating = coating;
-        this.voltageTierName = material.voltageTierName();
-        this.ratedVoltage = material.ratedVoltage();
         this.maxAmps = Math.multiplyExact(material.baseAmps(), gauge.millimeters());
         this.lossPerMeterPerAmpPpm =
                 coating.applyLossMultiplier(material.lossPerMeterPerAmpPpm());
@@ -83,7 +79,7 @@ public class WireBlock extends PipeBlock implements EntityBlock {
     }
 
     public String voltageTierName() {
-        return this.voltageTierName;
+        return this.material.voltageTierName();
     }
 
     public WireMaterial material() {
@@ -118,7 +114,7 @@ public class WireBlock extends PipeBlock implements EntityBlock {
     }
 
     public long ratedVoltage() {
-        return this.ratedVoltage;
+        return this.material.ratedVoltage();
     }
 
     public long maxAmps() {
@@ -196,7 +192,7 @@ public class WireBlock extends PipeBlock implements EntityBlock {
                 Component.translatable(
                         "tooltip.gridengineering.wire.rating",
                         this.gauge.millimeters(),
-                        this.voltageTierName,
+                        this.voltageTierName(),
                         this.maxAmps
                 ).withStyle(ChatFormatting.GRAY)
         );

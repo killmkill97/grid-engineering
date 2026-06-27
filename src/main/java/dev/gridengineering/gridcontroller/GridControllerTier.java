@@ -1,21 +1,21 @@
 package dev.gridengineering.gridcontroller;
 
+import dev.gridengineering.energy.VoltageTiers;
+
 public enum GridControllerTier {
-    MK1(1, "LV", 65_536L, 128L),
-    MK2(2, "MV", 524_288L, 512L),
-    MK3(3, "HV", 4_194_304L, 2_048L),
-    MK4(4, "SHV", 268_435_456L, 8_192L),
-    MK5(5, "CHV", 2_147_483_648L, 32_768L);
+    MK1(1, 0, 128L),
+    MK2(2, 1, 512L),
+    MK3(3, 2, 2_048L),
+    MK4(4, 3, 8_192L),
+    MK5(5, 4, 32_768L);
 
     private final int level;
-    private final String voltageTierName;
-    private final long maxVoltage;
+    private final int voltageTierIndex;
     private final long maxAmps;
 
-    GridControllerTier(int level, String voltageTierName, long maxVoltage, long maxAmps) {
+    GridControllerTier(int level, int voltageTierIndex, long maxAmps) {
         this.level = level;
-        this.voltageTierName = voltageTierName;
-        this.maxVoltage = maxVoltage;
+        this.voltageTierIndex = voltageTierIndex;
         this.maxAmps = maxAmps;
     }
 
@@ -28,11 +28,11 @@ public enum GridControllerTier {
     }
 
     public String voltageTierName() {
-        return this.voltageTierName;
+        return VoltageTiers.name(this.voltageTierIndex);
     }
 
     public long maxVoltage() {
-        return this.maxVoltage;
+        return VoltageTiers.voltage(this.voltageTierIndex);
     }
 
     public long maxAmps() {
@@ -40,6 +40,10 @@ public enum GridControllerTier {
     }
 
     public long maxPower() {
-        return Math.multiplyExact(this.maxVoltage, this.maxAmps);
+        long voltage = this.maxVoltage();
+        if (voltage > Long.MAX_VALUE / this.maxAmps) {
+            return Long.MAX_VALUE;
+        }
+        return voltage * this.maxAmps;
     }
 }

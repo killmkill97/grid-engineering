@@ -139,10 +139,12 @@ public final class GridControllerBlockEntity extends BlockEntity
         }
         this.refreshTickState();
         long safeVoltage = Math.max(1L, voltage);
-        long incomingMicroAmps = WireEnergyTransfer.toMicroAmps(amount, safeVoltage);
-        long maxMicroAmps = this.tier().maxAmps() * WireEnergyTransfer.MICRO_AMPS_PER_AMP;
-        boolean overloaded = safeVoltage > this.tier().maxVoltage()
-                || wouldExceed(this.usedMicroAmpsThisTick, incomingMicroAmps, maxMicroAmps);
+        // Grid Controllers distribute same-tick transit power and do not currently enforce
+        // an amperage limit. Keep the old calculation here for future balancing if controller
+        // amperage limits become meaningful again.
+        // long incomingMicroAmps = WireEnergyTransfer.toMicroAmps(amount, safeVoltage);
+        // long maxMicroAmps = this.tier().maxAmps() * WireEnergyTransfer.MICRO_AMPS_PER_AMP;
+        boolean overloaded = safeVoltage > this.tier().maxVoltage();
         if (overloaded) {
             if (!simulate) {
                 this.fail();
@@ -155,7 +157,10 @@ public final class GridControllerBlockEntity extends BlockEntity
             this.activeVoltage = safeVoltage;
             this.transitPower = saturatedAdd(this.transitPower, accepted);
             this.inputThisTick = saturatedAdd(this.inputThisTick, accepted);
-            this.usedMicroAmpsThisTick = saturatedAdd(this.usedMicroAmpsThisTick, incomingMicroAmps);
+            this.usedMicroAmpsThisTick = saturatedAdd(
+                    this.usedMicroAmpsThisTick,
+                    WireEnergyTransfer.toMicroAmps(accepted, safeVoltage)
+            );
             this.lastInputTick = this.level == null ? 0L : this.level.getGameTime();
             this.setChanged();
             this.sync();
