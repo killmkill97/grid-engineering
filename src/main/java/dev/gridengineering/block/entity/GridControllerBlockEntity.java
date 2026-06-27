@@ -1,7 +1,7 @@
 package dev.gridengineering.block.entity;
 
 import dev.gridengineering.block.GridControllerBlock;
-import dev.gridengineering.config.GridControllerConfig;
+import dev.gridengineering.config.FailureConfig;
 import dev.gridengineering.energy.ConfiguredPowerSource;
 import dev.gridengineering.energy.InternalPowerEndpoint;
 import dev.gridengineering.energy.VoltageAwarePowerSink;
@@ -225,7 +225,7 @@ public final class GridControllerBlockEntity extends BlockEntity
             return;
         }
         this.failed = true;
-        if (GridControllerConfig.failureMode() == GridControllerConfig.FailureMode.BREAK) {
+        if (FailureConfig.gridControllerFailure() == FailureConfig.FailureAction.BREAK) {
             this.level.destroyBlock(this.worldPosition, false);
             this.level.playSound(
                     null,

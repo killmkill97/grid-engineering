@@ -2,7 +2,7 @@ package dev.gridengineering;
 
 import com.mojang.logging.LogUtils;
 import dev.gridengineering.config.LaserConfig;
-import dev.gridengineering.config.GridControllerConfig;
+import dev.gridengineering.config.FailureConfig;
 import dev.gridengineering.config.VoltageConfig;
 import dev.gridengineering.laser.LaserEvents;
 import dev.gridengineering.laser.LaserTransmissionAnchorChunkLoader;
@@ -33,8 +33,8 @@ public final class GridEngineering {
         );
         modContainer.registerConfig(
                 ModConfig.Type.COMMON,
-                GridControllerConfig.SPEC,
-                "gridengineering-grid-controller.toml"
+                FailureConfig.SPEC,
+                "gridengineering-failures.toml"
         );
         LaserEvents.register();
         LOGGER.info("Initializing Grid Engineering");

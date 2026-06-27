@@ -1,6 +1,7 @@
 package dev.gridengineering.block.entity;
 
 import dev.gridengineering.block.LaserTransformerBlock;
+import dev.gridengineering.config.FailureConfig;
 import dev.gridengineering.energy.ConfiguredPowerSource;
 import dev.gridengineering.energy.InternalPowerEndpoint;
 import dev.gridengineering.energy.VoltageAwarePowerSink;
@@ -17,6 +18,9 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
@@ -34,6 +38,7 @@ public final class LaserTransformerBlockEntity extends BlockEntity
     private long laserTransmitTick = Long.MIN_VALUE;
     private long outputTick = Long.MIN_VALUE;
     private long outputThisTick;
+    private boolean failed;
 
     public LaserTransformerBlockEntity(BlockPos pos, BlockState state) {
         super(ModContent.LASER_TRANSFORMER_BLOCK_ENTITY.get(), pos, state);
@@ -110,8 +115,15 @@ public final class LaserTransformerBlockEntity extends BlockEntity
                 || side != this.gridSide()
                 || amount <= 0L
                 || voltage <= 0L
+                || this.failed
                 || !(this.level instanceof ServerLevel serverLevel)) {
             return 0L;
+        }
+        if (voltage > this.tier().maxVoltage()) {
+            if (!simulate) {
+                this.failFromOvervoltage();
+            }
+            return amount;
         }
         long transferred = LaserLinkManager.transmit(
                 serverLevel,
@@ -131,6 +143,7 @@ public final class LaserTransformerBlockEntity extends BlockEntity
         if (this.role() != LaserRole.RECEIVER
                 || side != this.gridSide()
                 || amount <= 0L
+                || this.failed
                 || this.level == null) {
             return 0L;
         }
@@ -150,12 +163,13 @@ public final class LaserTransformerBlockEntity extends BlockEntity
 
     @Override
     public boolean canReceiveInternalPower(Direction side) {
-        return this.role() == LaserRole.SENDER && side == this.gridSide();
+        return !this.failed && this.role() == LaserRole.SENDER && side == this.gridSide();
     }
 
     @Override
     public boolean canExtractInternalPower(Direction side) {
         return this.role() == LaserRole.RECEIVER
+                && !this.failed
                 && side == this.gridSide()
                 && this.linkedPos != null;
     }
@@ -172,7 +186,7 @@ public final class LaserTransformerBlockEntity extends BlockEntity
 
     @Override
     public long getAvailableOutputPower() {
-        if (this.role() != LaserRole.RECEIVER || !this.hasFreshLaserPower()) {
+        if (this.failed || this.role() != LaserRole.RECEIVER || !this.hasFreshLaserPower()) {
             return 0L;
         }
         return this.laserPower;
@@ -181,6 +195,7 @@ public final class LaserTransformerBlockEntity extends BlockEntity
     @Override
     public boolean canOutputToGrid(Direction side) {
         return this.role() == LaserRole.RECEIVER
+                && !this.failed
                 && side == this.gridSide()
                 && this.linkedPos != null;
     }
@@ -189,8 +204,15 @@ public final class LaserTransformerBlockEntity extends BlockEntity
         if (this.role() != LaserRole.RECEIVER
                 || amount <= 0L
                 || voltage <= 0L
+                || this.failed
                 || this.level == null) {
             return 0L;
+        }
+        if (voltage > this.tier().maxVoltage()) {
+            if (!simulate) {
+                this.failFromOvervoltage();
+            }
+            return amount;
         }
 
         long gameTime = this.level.getGameTime();
@@ -211,6 +233,53 @@ public final class LaserTransformerBlockEntity extends BlockEntity
             this.setChanged();
         }
         return accepted;
+    }
+
+    public void markBridgeTransmission(long voltage) {
+        if (!(this.level instanceof ServerLevel serverLevel) || this.failed) {
+            return;
+        }
+        long gameTime = serverLevel.getGameTime();
+        if (this.role() == LaserRole.SENDER) {
+            this.laserTransmitTick = gameTime;
+        } else {
+            this.laserReceiveTick = gameTime;
+            this.laserVoltage = Math.max(1L, voltage);
+        }
+        this.setChanged();
+    }
+
+    public void failFromOvervoltage() {
+        if (this.failed || this.level == null || this.level.isClientSide) {
+            return;
+        }
+        this.failed = true;
+        if (this.level instanceof ServerLevel serverLevel) {
+            LaserLinkManager.unregister(serverLevel, this.worldPosition);
+        }
+
+        if (FailureConfig.laserTransformerFailure() == FailureConfig.FailureAction.BREAK) {
+            this.level.destroyBlock(this.worldPosition, false);
+            this.level.playSound(
+                    null,
+                    this.worldPosition,
+                    SoundEvents.GLASS_BREAK,
+                    SoundSource.BLOCKS,
+                    1.0F,
+                    0.75F
+            );
+            return;
+        }
+
+        this.level.removeBlock(this.worldPosition, false);
+        this.level.explode(
+                null,
+                this.worldPosition.getX() + 0.5D,
+                this.worldPosition.getY() + 0.5D,
+                this.worldPosition.getZ() + 0.5D,
+                4.0F,
+                Level.ExplosionInteraction.BLOCK
+        );
     }
 
     public boolean isTransmittingForDisplay() {

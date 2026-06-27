@@ -168,6 +168,14 @@ public final class LaserLinkManager {
         return found;
     }
 
+    @Nullable
+    public static Link linkFor(
+            ServerLevel level,
+            LaserTransformerBlockEntity sender
+    ) {
+        return ensureLink(level, sender);
+    }
+
     public static long transmit(
             ServerLevel level,
             LaserTransformerBlockEntity sender,
@@ -185,8 +193,17 @@ public final class LaserLinkManager {
             sender.markLinkDirty();
             return 0L;
         }
-        if (voltage > link.maximumVoltage()) {
-            return 0L;
+        if (voltage > sender.tier().maxVoltage()) {
+            if (!simulate) {
+                sender.failFromOvervoltage();
+            }
+            return amount;
+        }
+        if (voltage > receiver.tier().maxVoltage()) {
+            if (!simulate) {
+                receiver.failFromOvervoltage();
+            }
+            return amount;
         }
 
         long calculatedLoss = LineLossCalculator.calculateLoss(

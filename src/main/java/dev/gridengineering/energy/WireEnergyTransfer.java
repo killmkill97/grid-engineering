@@ -3,6 +3,9 @@ package dev.gridengineering.energy;
 import dev.gridengineering.block.WireBlock;
 import dev.gridengineering.block.WirePortMode;
 import dev.gridengineering.block.entity.GridControllerBlockEntity;
+import dev.gridengineering.block.entity.LaserTransformerBlockEntity;
+import dev.gridengineering.laser.LaserLinkManager;
+import dev.gridengineering.laser.LaserRole;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.math.BigInteger;
@@ -62,7 +65,7 @@ public final class WireEnergyTransfer {
     }
 
     public static NetworkSnapshot inspectNetwork(ServerLevel level, BlockPos wirePos) {
-        NetworkScan network = scanNetwork(level, wirePos, null, false);
+        NetworkScan network = scanNetwork(level, wirePos, null, false, 0L);
         NetworkTickState tickState = runtime(level).networkStates.get(network.networkId());
         long gameTime = level.getGameTime();
         long inspectedWireMaxAmps = inspectedWireMaxAmps(level, wirePos);
@@ -111,7 +114,7 @@ public final class WireEnergyTransfer {
     }
 
     public static boolean isPowerFlowing(ServerLevel level, BlockPos wirePos) {
-        NetworkScan network = scanNetwork(level, wirePos, null, false);
+        NetworkScan network = scanNetwork(level, wirePos, null, false, 0L);
         NetworkTickState tickState = runtime(level).networkStates.get(network.networkId());
         if (tickState == null) {
             return false;
@@ -130,7 +133,7 @@ public final class WireEnergyTransfer {
             PowerEndpoint source,
             SourceProfile profile
     ) {
-        NetworkScan network = scanNetwork(level, startWirePos, sourcePos, true);
+        NetworkScan network = scanNetwork(level, startWirePos, sourcePos, true, profile.voltage());
         if (network.sinks().isEmpty()) {
             return;
         }
@@ -363,7 +366,8 @@ public final class WireEnergyTransfer {
             ServerLevel level,
             BlockPos startWirePos,
             @Nullable BlockPos sourcePos,
-            boolean collectSinks
+            boolean collectSinks,
+            long activeVoltage
     ) {
         PriorityQueue<WireVisit> queue = new PriorityQueue<>(
                 Comparator.comparingLong(WireVisit::pathLossPerAmpPpm)
@@ -472,6 +476,55 @@ public final class WireEnergyTransfer {
                 }
 
                 long endpointKey = neighborPos.asLong();
+                if (level.getBlockEntity(neighborPos) instanceof LaserTransformerBlockEntity laser) {
+                    if (collectSinks
+                            && laser.role() == LaserRole.SENDER
+                            && direction.getOpposite() == laser.gridSide()) {
+                        LaserLinkManager.Link link = LaserLinkManager.linkFor(level, laser);
+                        if (link != null
+                                && level.getBlockEntity(link.receiver())
+                                instanceof LaserTransformerBlockEntity receiver) {
+                            if (activeVoltage > link.maximumVoltage()) {
+                                failLaserBridge(level, link, activeVoltage);
+                                continue;
+                            }
+                            BlockPos remoteWirePos = receiver.getBlockPos().relative(receiver.gridSide());
+                            BlockState remoteWireState = level.getBlockState(remoteWirePos);
+                            if (remoteWireState.getBlock() instanceof WireBlock remoteWire
+                                    && WireBlock.isConnected(
+                                    remoteWireState,
+                                    receiver.gridSide().getOpposite()
+                            )) {
+                                long candidateLoss = saturatedAdd(
+                                        visit.pathLossPerAmpPpm(),
+                                        saturatedAdd(
+                                                link.routeLossPerAmpPpm(),
+                                                remoteWire.lossPerMeterPerAmpPpm()
+                                        )
+                                );
+                                int candidateDistance = visit.wireDistance() == Integer.MAX_VALUE
+                                        ? Integer.MAX_VALUE
+                                        : saturatedDistance(visit.wireDistance(), link.distance() + 1);
+                                PathCost candidate = new PathCost(candidateLoss, candidateDistance);
+                                long remoteWireKey = remoteWirePos.asLong();
+                                PathCost previous = bestPaths.get(remoteWireKey);
+                                if (previous == null || candidate.isBetterThan(previous)) {
+                                    bestPaths.put(remoteWireKey, candidate);
+                                    previousWires.put(remoteWireKey, wireKey);
+                                    queue.add(
+                                            new WireVisit(
+                                                    remoteWirePos.immutable(),
+                                                    candidateLoss,
+                                                    candidateDistance
+                                            )
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 if (level.getBlockEntity(neighborPos) instanceof GridControllerBlockEntity
                         && visitedGridControllers.add(endpointKey)) {
                     gridControllers.add(neighborPos.immutable());
@@ -525,6 +578,26 @@ public final class WireEnergyTransfer {
                 maxVoltage,
                 maxAmps
         );
+    }
+
+    private static int saturatedDistance(int base, int addition) {
+        return base > Integer.MAX_VALUE - addition ? Integer.MAX_VALUE : base + addition;
+    }
+
+    private static void failLaserBridge(
+            ServerLevel level,
+            LaserLinkManager.Link link,
+            long voltage
+    ) {
+        if (level.getBlockEntity(link.sender()) instanceof LaserTransformerBlockEntity sender
+                && voltage > sender.tier().maxVoltage()) {
+            sender.failFromOvervoltage();
+            return;
+        }
+        if (level.getBlockEntity(link.receiver()) instanceof LaserTransformerBlockEntity receiver
+                && voltage > receiver.tier().maxVoltage()) {
+            receiver.failFromOvervoltage();
+        }
     }
 
     private static List<BlockPos> routeTo(Map<Long, Long> previousWires, BlockPos endWirePos) {
