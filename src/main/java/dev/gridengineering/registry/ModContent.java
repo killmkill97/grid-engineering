@@ -2,6 +2,7 @@ package dev.gridengineering.registry;
 
 import dev.gridengineering.GridEngineering;
 import dev.gridengineering.block.CurrentRegulatorBlock;
+import dev.gridengineering.block.EntanglementLinkBlock;
 import dev.gridengineering.block.LaserTransformerBlock;
 import dev.gridengineering.block.LaserTransmissionAnchorBlock;
 import dev.gridengineering.block.GridControllerBlock;
@@ -11,15 +12,18 @@ import dev.gridengineering.block.WireCoating;
 import dev.gridengineering.block.WireGauge;
 import dev.gridengineering.block.WireMaterial;
 import dev.gridengineering.block.entity.CurrentRegulatorBlockEntity;
+import dev.gridengineering.block.entity.EntanglementLinkBlockEntity;
 import dev.gridengineering.block.entity.LaserTransformerBlockEntity;
 import dev.gridengineering.block.entity.GridControllerBlockEntity;
 import dev.gridengineering.block.entity.TestBatteryBlockEntity;
 import dev.gridengineering.block.entity.WireBlockEntity;
+import dev.gridengineering.item.EntangledElectronItem;
 import dev.gridengineering.item.NetworkMonitorItem;
 import dev.gridengineering.item.WireBlockItem;
 import dev.gridengineering.item.WireCutterItem;
 import dev.gridengineering.laser.LaserRole;
 import dev.gridengineering.laser.LaserTier;
+import dev.gridengineering.menu.EntanglementLinkMenu;
 import dev.gridengineering.menu.PowerControlMenu;
 import dev.gridengineering.gridcontroller.GridControllerTier;
 import java.util.Collection;
@@ -112,8 +116,8 @@ public final class ModContent {
 
     public static final DeferredItem<WireCutterItem> NBB_WIRE_CUTTER = ITEMS.registerItem(
             "nbb_alloy_wire_cutter",
-            WireCutterItem::new,
-            new Item.Properties().durability(2147483647).stacksTo(1)
+            properties -> new WireCutterItem(properties, false),
+            new Item.Properties().stacksTo(1)
     );
 
     public static final DeferredItem<NetworkMonitorItem> NETWORK_MONITOR = ITEMS.registerItem(
@@ -133,6 +137,12 @@ public final class ModContent {
 
     public static final DeferredItem<Item> POLYETHERETHERKETONE =
             ITEMS.registerSimpleItem("polyetheretherketone", new Item.Properties());
+
+    public static final DeferredItem<EntangledElectronItem> ENTANGLED_ELECTRON = ITEMS.registerItem(
+            "entangled_electron",
+            EntangledElectronItem::new,
+            new Item.Properties().stacksTo(2)
+    );
 
     public static final DeferredBlock<TestBatteryBlock> TEST_BATTERY = BLOCKS.registerBlock(
             "test_battery",
@@ -157,6 +167,18 @@ public final class ModContent {
 
     public static final DeferredItem<BlockItem> CURRENT_REGULATOR_ITEM =
             ITEMS.registerSimpleBlockItem("current_regulator", CURRENT_REGULATOR);
+
+    public static final DeferredBlock<EntanglementLinkBlock> ENTANGLEMENT_LINK = BLOCKS.registerBlock(
+            "entanglement_link",
+            EntanglementLinkBlock::new,
+            BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(4.0F, 8.0F)
+                    .sound(SoundType.METAL)
+    );
+
+    public static final DeferredItem<BlockItem> ENTANGLEMENT_LINK_ITEM =
+            ITEMS.registerSimpleBlockItem("entanglement_link", ENTANGLEMENT_LINK);
 
     public static final DeferredBlock<LaserTransmissionAnchorBlock> LASER_TRANSMISSION_ANCHOR =
             BLOCKS.registerBlock(
@@ -201,6 +223,15 @@ public final class ModContent {
                     ).build(null)
             );
 
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<EntanglementLinkBlockEntity>>
+            ENTANGLEMENT_LINK_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register(
+                    "entanglement_link",
+                    () -> BlockEntityType.Builder.of(
+                            EntanglementLinkBlockEntity::new,
+                            ENTANGLEMENT_LINK.get()
+                    ).build(null)
+            );
+
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<LaserTransformerBlockEntity>>
             LASER_TRANSFORMER_BLOCK_ENTITY = BLOCK_ENTITY_TYPES.register(
                     "laser_transformer",
@@ -229,6 +260,12 @@ public final class ModContent {
                     () -> new MenuType<>(PowerControlMenu::new, FeatureFlags.DEFAULT_FLAGS)
             );
 
+    public static final DeferredHolder<MenuType<?>, MenuType<EntanglementLinkMenu>> ENTANGLEMENT_LINK_MENU =
+            MENU_TYPES.register(
+                    "entanglement_link",
+                    () -> new MenuType<>(EntanglementLinkMenu::new, FeatureFlags.DEFAULT_FLAGS)
+            );
+
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> GRID_ENGINEERING_TAB =
             CREATIVE_MODE_TABS.register(
                     "grid_engineering",
@@ -245,8 +282,10 @@ public final class ModContent {
                                 output.accept(POLYETHYLENE.get());
                                 output.accept(POLYPROPYLENE.get());
                                 output.accept(POLYETHERETHERKETONE.get());
+                                output.accept(ENTANGLED_ELECTRON.get());
                                 output.accept(TEST_BATTERY_ITEM.get());
                                 output.accept(CURRENT_REGULATOR_ITEM.get());
+                                output.accept(ENTANGLEMENT_LINK_ITEM.get());
                                 output.accept(LASER_TRANSMISSION_ANCHOR_ITEM.get());
                                 gridControllerItems().forEach(output::accept);
                                 laserItems().forEach(output::accept);
@@ -372,6 +411,11 @@ public final class ModContent {
                 Capabilities.EnergyStorage.BLOCK,
                 CURRENT_REGULATOR_BLOCK_ENTITY.get(),
                 CurrentRegulatorBlockEntity::getEnergyStorage
+        );
+        event.registerBlockEntity(
+                Capabilities.EnergyStorage.BLOCK,
+                ENTANGLEMENT_LINK_BLOCK_ENTITY.get(),
+                EntanglementLinkBlockEntity::getEnergyStorage
         );
     }
 }

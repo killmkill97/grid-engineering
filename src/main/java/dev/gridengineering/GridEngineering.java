@@ -1,6 +1,8 @@
 package dev.gridengineering;
 
 import com.mojang.logging.LogUtils;
+import dev.gridengineering.command.GridEngineeringCommands;
+import dev.gridengineering.config.EntanglementConfig;
 import dev.gridengineering.config.LaserConfig;
 import dev.gridengineering.config.FailureConfig;
 import dev.gridengineering.config.VoltageConfig;
@@ -36,6 +38,12 @@ public final class GridEngineering {
                 FailureConfig.SPEC,
                 "gridengineering-failures.toml"
         );
+        modContainer.registerConfig(
+                ModConfig.Type.COMMON,
+                EntanglementConfig.SPEC,
+                "gridengineering-entanglement.toml"
+        );
+        GridEngineeringCommands.register();
         LaserEvents.register();
         LOGGER.info("Initializing Grid Engineering");
     }

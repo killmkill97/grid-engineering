@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "mode=input": {
+      "model": "gridengineering:block/entanglement_link_input"
+    },
+    "mode=output": {
+      "model": "gridengineering:block/entanglement_link_output"
+    }
+  }
+}

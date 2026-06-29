@@ -7,6 +7,7 @@ import dev.gridengineering.energy.PowerEndpoint;
 import dev.gridengineering.energy.PowerEndpointAccess;
 import dev.gridengineering.energy.PowerOfTwoChoices;
 import dev.gridengineering.energy.VoltageTiers;
+import dev.gridengineering.energy.WireEnergyTransfer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -246,7 +247,8 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
         this.refreshTickState();
         long budget = this.remainingOutputBudget();
         long fromInput = this.availableInputPower(Math.max(0L, budget - this.transitPower));
-        return Math.min(budget, saturatedAdd(this.transitPower, fromInput));
+        long available = Math.min(budget, saturatedAdd(this.transitPower, fromInput));
+        return Math.min(available, this.outputDemandCapacity(available));
     }
 
     @Override
@@ -260,10 +262,12 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
             return 0L;
         }
         this.refreshTickState();
-        long accepted = Math.min(
+        long outputBudget = Math.min(
                 amount,
                 Math.max(0L, this.configuredOutputPerTick() - this.transitPower)
         );
+        long outputDemand = this.outputDemandCapacity(saturatedAdd(this.transitPower, outputBudget));
+        long accepted = Math.min(outputBudget, Math.max(0L, outputDemand - this.transitPower));
         if (!simulate && accepted > 0L) {
             this.transitPower += accepted;
             this.inputThisTick += accepted;
@@ -309,7 +313,7 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
         this.refreshTickState();
         return side == this.getInputSide()
                 && this.transitPower < this.configuredOutputPerTick()
-                && this.hasOutputConnection();
+                && this.outputDemandCapacity(1L) > 0L;
     }
 
     @Override
@@ -348,12 +352,17 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
         }
     }
 
-    private boolean hasOutputConnection() {
+    private long outputDemandCapacity(long requested) {
+        if (requested <= 0L) {
+            return 0L;
+        }
         if (this.level == null) {
-            return true;
+            return requested;
         }
 
         Direction inputSide = this.getInputSide();
+        long remaining = requested;
+        long accepted = 0L;
         for (Direction direction : Direction.values()) {
             if (direction == inputSide) {
                 continue;
@@ -362,7 +371,21 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
             BlockPos neighborPos = this.worldPosition.relative(direction);
             if (this.level.getBlockState(neighborPos).getBlock()
                     instanceof dev.gridengineering.block.WireBlock) {
-                return true;
+                if (this.level instanceof ServerLevel serverLevel) {
+                    long wireAccepted = WireEnergyTransfer.simulateWireNetworkAccepted(
+                            serverLevel,
+                            neighborPos,
+                            this.worldPosition,
+                            remaining,
+                            this.configuredVoltage
+                    );
+                    accepted = saturatedAdd(accepted, wireAccepted);
+                    remaining = Math.max(0L, requested - accepted);
+                    if (remaining <= 0L) {
+                        return requested;
+                    }
+                }
+                continue;
             }
             if (isCurrentRegulator(this.level, neighborPos)) {
                 continue;
@@ -374,10 +397,15 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
                     direction.getOpposite()
             );
             if (endpoint != null && endpoint.canReceive()) {
-                return true;
+                long endpointAccepted = endpoint.receive(remaining, true);
+                accepted = saturatedAdd(accepted, endpointAccepted);
+                remaining = Math.max(0L, requested - accepted);
+                if (remaining <= 0L) {
+                    return requested;
+                }
             }
         }
-        return false;
+        return Math.min(requested, accepted);
     }
 
     private long availableInputPower(long request) {
@@ -522,7 +550,9 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
 
         @Override
         public boolean canReceive() {
-            return true;
+            return CurrentRegulatorBlockEntity.this.canReceiveInternalPower(
+                    CurrentRegulatorBlockEntity.this.getInputSide()
+            );
         }
     }
 
@@ -557,7 +587,9 @@ public final class CurrentRegulatorBlockEntity extends BlockEntity
 
         @Override
         public boolean canExtract() {
-            return CurrentRegulatorBlockEntity.this.transitPower > 0L;
+            return CurrentRegulatorBlockEntity.this.canExtractInternalPower(
+                    CurrentRegulatorBlockEntity.this.getInputSide().getOpposite()
+            );
         }
 
         @Override

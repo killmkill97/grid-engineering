@@ -59,6 +59,7 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void registerMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModContent.POWER_CONTROL_MENU.get(), PowerControlScreen::new);
+        event.register(ModContent.ENTANGLEMENT_LINK_MENU.get(), EntanglementLinkScreen::new);
     }
 
     @SubscribeEvent

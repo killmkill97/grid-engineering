@@ -24,9 +24,15 @@ import net.minecraft.world.phys.Vec3;
 
 public final class WireCutterItem extends Item {
     private static final float WIRE_DESTROY_SPEED = 1024.0F;
+    private final boolean consumesDurability;
 
     public WireCutterItem(Properties properties) {
+        this(properties, true);
+    }
+
+    public WireCutterItem(Properties properties, boolean consumesDurability) {
         super(properties);
+        this.consumesDurability = consumesDurability;
     }
 
     @Override
@@ -94,11 +100,7 @@ public final class WireCutterItem extends Item {
             );
 
             if (cut) {
-                context.getItemInHand().hurtAndBreak(
-                        1,
-                        player,
-                        LivingEntity.getSlotForHand(context.getHand())
-                );
+                damageCutter(context.getItemInHand(), player, LivingEntity.getSlotForHand(context.getHand()));
             }
         }
 
@@ -132,10 +134,16 @@ public final class WireCutterItem extends Item {
         LivingEntity miningEntity
     ) {
         if (!level.isClientSide && state.is(ModTags.WIRES)) {
-            stack.hurtAndBreak(1, miningEntity, EquipmentSlot.MAINHAND);
+            damageCutter(stack, miningEntity, EquipmentSlot.MAINHAND);
             return true;
         }
         return super.mineBlock(stack, level, state, pos, miningEntity);
+    }
+
+    private void damageCutter(ItemStack stack, LivingEntity entity, EquipmentSlot slot) {
+        if (consumesDurability) {
+            stack.hurtAndBreak(1, entity, slot);
+        }
     }
 
     private static Direction findTargetDirection(

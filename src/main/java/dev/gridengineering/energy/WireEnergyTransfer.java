@@ -126,6 +126,24 @@ public final class WireEnergyTransfer {
                 && tickState.inputPower > 0L;
     }
 
+    public static long simulateWireNetworkAccepted(
+            ServerLevel level,
+            BlockPos wirePos,
+            BlockPos sourcePos,
+            long offeredPower,
+            long voltage
+    ) {
+        if (offeredPower <= 0L) {
+            return 0L;
+        }
+
+        NetworkScan network = scanNetwork(level, wirePos, sourcePos, true, voltage);
+        if (network.sinks().isEmpty()) {
+            return 0L;
+        }
+        return simulateAccepted(network.sinks(), offeredPower, voltage);
+    }
+
     private static void transferFromSource(
             ServerLevel level,
             BlockPos startWirePos,
